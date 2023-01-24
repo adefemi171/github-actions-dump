@@ -1,0 +1,45 @@
+# The goal of this playbook is to generate a configuration file per environment and deploy it with app bundle
+# The playbook assume you have a nodejs app with a config folder and a config file per environment
+name: 'Config Deployment'
+
+on:
+    push:
+        branches:
+            - staging
+
+env:
+    FORCE_COLOR: 3
+
+jobs:
+    deploy_staging:
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/staging'
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v2
+            - name: Use Node.js 14
+              uses: actions/setup-node@v1
+              with:
+                  node-version: 14
+            - uses: actions/cache@v2
+              with:
+                  path: '**/node_modules'
+                  key: ${{ runner.os }}-modules-${{ hashFiles('**/{yarn.lock,package.json}') }}-${{ secrets.CACHE_KEY }}
+            - name: 'Install dependencies'
+              run: yarn install
+            - name: 'Build packages'
+              run: yarn build
+              env:
+                  GITHUB_SHA: ${{ env.GITHUB_SHA }}
+            - name: 'Move Config file to environment'
+              run: |
+                  mv 'config/config.staging.json' 'dist/config.json'
+            - name: 'Substitute config file'
+              uses: microsoft/variable-substitution@v1
+              with:
+                  files: 'dist/config.json'
+                  mappings: |
+                      {
+                          "API_URL": "${{ secrets.API_URL }}",
+                          "API_KEY": "${{ secrets.CACHE_KEY }}"
+                      }
